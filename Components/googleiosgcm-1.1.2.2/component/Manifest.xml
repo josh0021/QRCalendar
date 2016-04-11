@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<component format="1" id="googleiosgcm" is-shell="true">
+  <name>Google Cloud Messaging for iOS</name>
+  <publisher>Xamarin Inc.</publisher>
+  <publisher-url>http://xamarin.com</publisher-url>
+  <docs-url>https://developers.google.com/cloud-messaging/</docs-url>
+  <version>1.1.2.2</version>
+  <summary>Simple and reliable messaging to reach over a billion devices.</summary>
+  <packages>
+    <package id="Xamarin.Google.iOS.GoogleCloudMessaging" version="1.1.2.2" framework="ios-unified" />
+  </packages>
+  <samples>
+    <sample id="GoogleCloudMessagingSample">
+      <name>GoogleCloudMessaging Sample</name>
+      <summary>GoogleCloudMessaging Sample</summary>
+    </sample>
+  </samples>
+</component>
