@@ -2,19 +2,18 @@
 
 using UIKit;
 
-namespace QRCalendar
+namespace EventResultEnum
 {
-	public partial class SecondViewController : UIViewController
+	public partial class ViewController : UIViewController
 	{
-		public SecondViewController (IntPtr handle) : base (handle)
+		public ViewController (IntPtr handle) : base (handle)
 		{
 		}
 
 		public override void ViewDidLoad ()
 		{
 			base.ViewDidLoad ();
-			this.View.BackgroundColor = UIColor.Cyan;
-			this.Title = "Polls";
+			// Perform any additional setup after loading the view, typically from a nib.
 		}
 
 		public override void DidReceiveMemoryWarning ()

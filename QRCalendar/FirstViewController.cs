@@ -6,6 +6,7 @@ using ZXing.Mobile;
 using EventKit;
 using EventKitUI;
 using Foundation;
+using System.Threading.Tasks;
 
 namespace QRCalendar
 {
@@ -17,13 +18,14 @@ namespace QRCalendar
 		public override void ViewDidLoad ()
 		{
 			base.ViewDidLoad ();
-
+			this.TabBarItem.Image = UIImage.FromFile ("qr.png");
+			this.Title = "Scan";
 		}
 
 
 		override async public void ViewDidAppear (bool animated)
 		{
-			base.ViewDidAppear (animated);
+			this.TabBarController.SelectedIndex =1;
 			if (ParentViewController != null) 
 			{
 				CustomOverlayView customOverlay = new CustomOverlayView();
@@ -31,7 +33,7 @@ namespace QRCalendar
 
 				customOverlay.ButtonCancel.TouchUpInside += delegate {
 					Console.WriteLine("cancelpresssed");
-					this.TabBarController.SelectedIndex = 1;
+					this.NavigationController.TabBarController.SelectedIndex = 0;
 				};
 
 				//Tell our scanner to use our custom overlay
@@ -54,68 +56,116 @@ namespace QRCalendar
 			// Release any cached data, images, etc that aren't in use.
 		}
 	
-		void HandleScanResult(ZXing.Result result)
+	   void HandleScanResult (ZXing.Result result)
+		{
+			
+			string testmsg = " ";
+			if (result != null && !string.IsNullOrEmpty (result.Text)) {
+				string[] msg = VDateToDateTime (result.Text);
+				string inputTitle = (string.IsNullOrEmpty (msg [0])) ? ("") : msg [0];
+				string inputLocation = (string.IsNullOrEmpty (msg [1])) ? ("") : msg [1];
+				DateTime inputDStart = IcalToDateTime (msg [2]);
+				DateTime inputDEnd = IcalToDateTime (msg [3]);
+
+
+				// Create a new Alert Controller
+				UIAlertController actionSheetAlert = UIAlertController.Create ("Action Sheet", "Select an event from below", UIAlertControllerStyle.ActionSheet);
+
+				// Add Actions
+				actionSheetAlert.AddAction (UIAlertAction.Create ("Add To Calendar", UIAlertActionStyle.Default, (action) => Add (0, inputDStart, inputDEnd, inputTitle, inputLocation)));
+				actionSheetAlert.AddAction (UIAlertAction.Create ("Add To Reminders", UIAlertActionStyle.Default, (action) => Add (1, inputDStart, inputDEnd, inputTitle, inputLocation)));
+				actionSheetAlert.AddAction (UIAlertAction.Create ("Add To Both", UIAlertActionStyle.Default, (action) => Add (2, inputDStart, inputDEnd, inputTitle, inputLocation)));
+				actionSheetAlert.AddAction (UIAlertAction.Create ("Cancel", UIAlertActionStyle.Cancel, (action) => Console.WriteLine ("Cancel button pressed.")));
+
+				// Xamarin code
+				// Required for iPad - You must specify a source for the Action Sheet since it is
+				// displayed as a popover
+				UIPopoverPresentationController presentationPopover = actionSheetAlert.PopoverPresentationController;
+				if (presentationPopover != null) {
+					presentationPopover.SourceView = this.View;
+					presentationPopover.PermittedArrowDirections = UIPopoverArrowDirection.Up;
+				}
+
+				// Display the alert
+				this.PresentViewController (actionSheetAlert, true, null);
+			} 
+			else
+				new UIAlertView ("QR Code Scan Results:", "Scanning Canceled!", null, "ok", null).Show ();
+		}
+
+		public void Add(int actionResult, DateTime inputDStart, DateTime inputDEnd, string inputTitle, string inputLocation)
 		{
 			App.Current.EventStore.RequestAccess (EKEntityType.Event, 
 				(bool granted, NSError e) => {
-					if (granted)
-					{
-						EKEvent newEvent = EKEvent.FromStore ( App.Current.EventStore );
+					if (granted) {
+						EKEvent newEvent = EKEvent.FromStore (App.Current.EventStore);
 						// make the event start 20 minutes from now and last 30 minutes
-						newEvent.StartDate = DateTimeToNSDate(DateTime.Now.AddMinutes ( 20 ));
-						newEvent.EndDate = DateTimeToNSDate(DateTime.Now.AddMinutes ( 50 ));
-						newEvent.Title = "Get outside and do some exercise!";
-						newEvent.Notes = "This is your motivational event to go and do 30 minutes of exercise. Super important. Do this.";
+						newEvent.StartDate = DateTimeToNSDate (inputDStart);
+						newEvent.EndDate = DateTimeToNSDate (inputDEnd);
+						newEvent.Title = inputTitle;
+						newEvent.Location = inputLocation;
 
-						newEvent.Calendar = App.Current.EventStore.DefaultCalendarForNewEvents;
+						EKReminder reminder = EKReminder.Create (App.Current.EventStore);
+						reminder.Title = "Do something awesome!";
+						reminder.Calendar = App.Current.EventStore.DefaultCalendarForNewReminders;
 
-					App.Current.EventStore.SaveEvent ( newEvent, EKSpan.ThisEvent, out e );
-					}
-					else
-						new UIAlertView ( "Access Denied", 
-							"User Denied Access to Calendar Data", null,
-							"ok", null).Show ();
-				} );
-			
-
-			string testmsg = "test";
-			if (result != null && !string.IsNullOrEmpty (result.Text)) {
-				pp.Current.EventStore.RequestAccess (EKEntityType.Event, 
-					(bool granted, NSError e) => {
-						if (granted)
-						{
-							EKEvent newEvent = EKEvent.FromStore ( App.Current.EventStore );
-							// make the event start 20 minutes from now and last 30 minutes
-							newEvent.StartDate = DateTimeToNSDate(DateTime.Now.AddMinutes ( 20 ));
-							newEvent.EndDate = DateTimeToNSDate(DateTime.Now.AddMinutes ( 50 ));
-							newEvent.Title = "Get outside and do some exercise!";
-							newEvent.Notes = "This is your motivational event to go and do 30 minutes of exercise. Super important. Do this.";
-
+						if (actionResult == 0) {
 							newEvent.Calendar = App.Current.EventStore.DefaultCalendarForNewEvents;
-
-							App.Current.EventStore.SaveEvent ( newEvent, EKSpan.ThisEvent, out e );
+							App.Current.EventStore.SaveEvent (newEvent, EKSpan.ThisEvent, out e);
+						} else if (actionResult == 1) {
+							NSError ee;
+							App.Current.EventStore.SaveReminder (reminder, true, out ee);
+						} else if (actionResult == 2) {
+							newEvent.Calendar = App.Current.EventStore.DefaultCalendarForNewEvents;
+							App.Current.EventStore.SaveEvent (newEvent, EKSpan.ThisEvent, out e);
 						}
-						else
-							new UIAlertView ( "Access Denied", 
-								"User Denied Access to Calendar Data", null,
-								"ok", null).Show ();
-					} );
-				string[] msg = VDateToDateTime (result.Text);
-				string inputTitle = msg [0];
-				string inputLocation = msg [1];
-				string inputDStart = msg [2];
-				string inputDEnd = msg [3];
-			}
-
-			else
-				testmsg = "Scanning Canceled!";
-
-			this.InvokeOnMainThread (() => {
-				var av = new UIAlertView ("Barcode Result", testmsg, null, "OK", null);
-				av.Show ();
-			});
+						this.InvokeOnMainThread (() => {
+							var av = new UIAlertView ("QR Code Scan Results:", "Successfully Added event!", null, "ok", null);
+							av.Show ();
+						});
+					} else {
+						this.InvokeOnMainThread (() => {
+							var av = new UIAlertView ("Access Denied", "User Denied Access to Calendar Data", null, "ok", null);
+							av.Show ();
+						});
+					}
+				});
 		}
-
+				
+//				// Display the alert
+//				this.PresentViewController(actionSheetAlert,true,null);
+//				App.Current.EventStore.RequestAccess (EKEntityType.Event, 
+//					(bool granted, NSError e) => {
+//						if (granted)
+//						{
+//							EKEvent newEvent = EKEvent.FromStore ( App.Current.EventStore );
+//							// make the event start 20 minutes from now and last 30 minutes
+//							newEvent.StartDate = DateTimeToNSDate(inputDStart);
+//							newEvent.EndDate = DateTimeToNSDate(inputDEnd);
+//							newEvent.Title = inputTitle;
+//							newEvent.Location = inputLocation;
+//
+//							newEvent.Calendar = App.Current.EventStore.DefaultCalendarForNewEvents;
+//
+//							App.Current.EventStore.SaveEvent ( newEvent, EKSpan.ThisEvent, out e );
+//						}
+//						else
+//							new UIAlertView ( "Access Denied", 
+//								"User Denied Access to Calendar Data", null,
+//								"ok", null).Show ();
+//					} );
+//				testmsg = "Successfully Added event!";
+//			}
+//
+//			else
+//				testmsg = "Scanning Canceled!";
+//
+//			this.InvokeOnMainThread (() => {
+//				var av = new UIAlertView ("QR Code Scan Results:", testmsg, null, "OK", null);
+//				av.Show ();
+//			});
+//		}
+//
 		public static NSDate DateTimeToNSDate(DateTime date)
 		{
 			DateTime reference = TimeZone.CurrentTimeZone.ToLocalTime(
@@ -125,11 +175,16 @@ namespace QRCalendar
 		}
 
 		public static DateTime IcalToDateTime(string strDate){
+			strDate = strDate.Replace("\r", "");
+			Console.WriteLine (strDate);
 			string format;
 			DateTime resultDate;
 			CultureInfo provider = CultureInfo.InvariantCulture;
-			format = "yyyyMMddThhmmssssZ";
+			format = "yyyyMMddTHHmmssssZ";
 			resultDate = DateTime.ParseExact(strDate, format, provider);
+			Console.WriteLine (resultDate.ToString ());
+			Console.WriteLine ("test");
+			return resultDate;
 		}
 
 		public string [] VDateToDateTime(string ical){
@@ -140,39 +195,28 @@ namespace QRCalendar
 			for (int i = 0; i < lines.Length; i++) {
 				if (lines [i].Contains ("BEGIN:VEVENT")) {
 					
-					for (int j = 0; j < 4; j++)
-					{
-					string[] line = lines [i + j + 1].Split (delim);
-					string temp = "";
-					for (int k = 1; k < line.Length; k++) {
-						if (k < line.Length - 1)
-							temp += line [k] + ":";
-						else
-							temp += line [k];
+					for (int j = 0; j < 4; j++) {
+						string[] line = lines [i + j + 1].Split (delim);
+						string temp = "";
+						for (int k = 1; k < line.Length; k++) {
+							if (k < line.Length - 1)
+								temp += line [k] + ":";
+							else
+								temp += line [k];
+						}
+					
+						eventData [j] = temp;
 					}
-					eventData [j] = temp;
 				}
 			}
-//						string strDate = eventData[0].ToString();
-//						strDate = strDate.Replace("\r", "");
-//
-//						string format;
-//						DateTime result;
-//						CultureInfo provider = CultureInfo.InvariantCulture;
-//						format = "yyyyMMddThhmmssssZ";
-//						result = DateTime.ParseExact(strDate, format, provider);
-//						i += 10;
-//						return result;
-			
-			}
 			return eventData;
-//			for(int i =0; i< eventData.Length; i++)
-//			{
-//				Console.WriteLine (eventData[i].ToString ());
-//			}
 		}
-			
 	}
 }
-
-	
+////			for(int i =0; i< eventData.Length; i++)
+////			{
+////				Console.WriteLine (eventData[i].ToString ());
+////			}
+//		}
+//			
+//	}
